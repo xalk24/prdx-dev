@@ -77,6 +77,46 @@ paths:
             },
           '409': { $ref: '#/components/responses/Error' }
         }
+  /projects/{projectId}/assets:
+    parameters: [{ $ref: '#/components/parameters/ProjectID' }]
+    post:
+      operationId: createAsset
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  contentEncoding: binary
+      responses:
+        '201':
+          description: immutable project-owned asset
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Asset' }
+        '404': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+  /projects/{projectId}/assets/{assetId}:
+    parameters:
+      [{ $ref: '#/components/parameters/ProjectID' }, { $ref: '#/components/parameters/AssetID' }]
+    get:
+      operationId: getAsset
+      responses:
+        '200':
+          description: immutable image bytes
+          headers:
+            X-Content-Type-Options: { schema: { type: string, const: nosniff } }
+          content:
+            image/png: { schema: { type: string, contentEncoding: binary } }
+            image/jpeg: { schema: { type: string, contentEncoding: binary } }
+            image/webp: { schema: { type: string, contentEncoding: binary } }
+        '404': { $ref: '#/components/responses/Error' }
   /generation-jobs/{jobId}:
     get:
       operationId: getGenerationJob
@@ -197,6 +237,7 @@ components:
   parameters:
     ProjectID: { name: projectId, in: path, required: true, schema: { type: string } }
     JobID: { name: jobId, in: path, required: true, schema: { type: string } }
+    AssetID: { name: assetId, in: path, required: true, schema: { type: string } }
     IdempotencyKey:
       {
         name: Idempotency-Key,
@@ -217,6 +258,20 @@ components:
         type: object,
         required: [id, title, revision],
         properties: { id: { type: string }, title: { type: string }, revision: { type: integer } }
+      }
+    Asset:
+      {
+        type: object,
+        additionalProperties: false,
+        required: [id, projectId, mime, size, url],
+        properties:
+          {
+            id: { type: string },
+            projectId: { type: string },
+            mime: { enum: [image/png, image/jpeg, image/webp] },
+            size: { type: integer, minimum: 1, maximum: 10485760 },
+            url: { type: string }
+          }
       }
     DeckSnapshot:
       {

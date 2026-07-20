@@ -23,22 +23,26 @@ try {
 		const request = JSON.parse((await readStdin()).toString('utf8'));
 		const assets = request.assets ?? {};
 		const html = renderDeckHtml(request.deck, {
-			assetUrl: (id) =>
-				assets[id] ?? `http://127.0.0.1:8080/api/v1/assets/${encodeURIComponent(id)}`
+			assetUrl: (id) => {
+				const url = assets[id];
+				if (!url) throw new Error(`asset missing: ${id}`);
+				return url;
+			}
 		});
 		const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 		await page.setContent(html, { waitUntil: 'networkidle' });
 		await page.evaluate(async () => {
 			await document.fonts.ready;
 			await Promise.all(
-				[...document.images].map((image) =>
-					image.complete
-						? undefined
-						: new Promise((resolve, reject) => {
-								image.addEventListener('load', resolve, { once: true });
-								image.addEventListener('error', reject, { once: true });
-							})
-				)
+				[...document.images].map(async (image) => {
+					if (!image.complete) {
+						await new Promise((resolve, reject) => {
+							image.addEventListener('load', resolve, { once: true });
+							image.addEventListener('error', reject, { once: true });
+						});
+					}
+					if (image.naturalWidth <= 0) throw new Error(`image failed to load: ${image.src}`);
+				})
 			);
 		});
 		if (process.argv.includes('--screenshot')) {

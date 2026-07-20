@@ -1,9 +1,13 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"strconv"
@@ -28,10 +32,12 @@ func New(store *presentator.Store, service *presentator.Service) http.Handler {
 	m.HandleFunc("GET /api/v1/generation-jobs/{jobId}", a.getJob)
 	m.HandleFunc("GET /api/v1/generation-jobs/{jobId}/candidate", a.candidate)
 	m.HandleFunc("POST /api/v1/generation-jobs/{jobId}/apply", a.apply)
+	m.HandleFunc("POST /api/v1/projects/{projectId}/assets", a.createAsset)
+	m.HandleFunc("GET /api/v1/projects/{projectId}/assets/{assetId}", a.getAsset)
 	m.HandleFunc("POST /api/v1/projects/{projectId}/export-jobs", a.createExport)
 	m.HandleFunc("GET /api/v1/export-jobs/{jobId}", a.getExportJob)
 	m.HandleFunc("GET /api/v1/export-jobs/{jobId}/download", a.downloadExport)
-	return http.MaxBytesHandler(m, 2<<20)
+	return http.MaxBytesHandler(m, 11<<20)
 }
 func (a *API) health(w http.ResponseWriter, _ *http.Request) {
 	write(w, 200, map[string]string{"status": "ok"})
@@ -152,6 +158,69 @@ func (a *API) createExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, 202, j)
+}
+
+const maxAssetBytes = 10 << 20
+
+func (a *API) createAsset(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(maxAssetBytes); err != nil {
+		problem(w, r, 400, "invalid_asset", "multipart image up to 10 MB is required", false)
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		problem(w, r, 400, "invalid_asset", "file field is required", false)
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxAssetBytes+1))
+	if err != nil || len(data) == 0 || len(data) > maxAssetBytes {
+		problem(w, r, 413, "asset_too_large", "asset must contain 1..10485760 bytes", false)
+		return
+	}
+	mime, err := validateImage(data)
+	if err != nil {
+		problem(w, r, 415, "unsupported_asset", err.Error(), false)
+		return
+	}
+	asset, err := a.store.CreateAsset(r.PathValue("projectId"), mime, data)
+	if err != nil {
+		problemFor(w, r, err)
+		return
+	}
+	write(w, 201, map[string]any{"id": asset.ID, "projectId": asset.ProjectID, "mime": asset.MIME, "size": asset.Size, "url": fmt.Sprintf("/api/v1/projects/%s/assets/%s", asset.ProjectID, asset.ID)})
+}
+
+func (a *API) getAsset(w http.ResponseWriter, r *http.Request) {
+	asset, err := a.store.Asset(r.PathValue("projectId"), r.PathValue("assetId"))
+	if err != nil {
+		problemFor(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", asset.MIME)
+	w.Header().Set("Content-Length", strconv.Itoa(asset.Size))
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(asset.Data)
+}
+
+func validateImage(data []byte) (string, error) {
+	mime := http.DetectContentType(data)
+	switch mime {
+	case "image/png", "image/jpeg":
+		if _, _, err := image.DecodeConfig(bytes.NewReader(data)); err != nil {
+			return "", errors.New("image cannot be decoded")
+		}
+		return mime, nil
+	case "image/webp":
+		if len(data) < 16 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WEBP" {
+			return "", errors.New("invalid WebP")
+		}
+		return mime, nil
+	default:
+		return "", errors.New("only PNG, JPEG and WebP assets are allowed")
+	}
 }
 func (a *API) getExportJob(w http.ResponseWriter, r *http.Request) {
 	j, err := a.store.Job(r.PathValue("jobId"))

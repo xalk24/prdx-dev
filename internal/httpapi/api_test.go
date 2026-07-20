@@ -3,7 +3,9 @@ package httpapi_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -128,6 +130,56 @@ func TestApplyRequiresIdempotencyKey(t *testing.T) {
 	server := httptest.NewServer(httpapi.New(store, svc))
 	defer server.Close()
 	request(t, http.MethodPost, server.URL+"/api/v1/generation-jobs/missing/apply", `{"baseRevision":1}`, nil, http.StatusBadRequest, nil)
+}
+
+func TestProjectAssetOwnershipAndMIME(t *testing.T) {
+	store := presentator.NewStore()
+	svc := presentator.NewService(store, presentator.FixturePredictorX{}, presentator.MinimalPDF{})
+	server := httptest.NewServer(httpapi.New(store, svc))
+	defer server.Close()
+	var first, second struct {
+		ID string `json:"id"`
+	}
+	request(t, http.MethodPost, server.URL+"/api/v1/projects", `{"title":"first"}`, nil, 201, &first)
+	request(t, http.MethodPost, server.URL+"/api/v1/projects", `{"title":"second"}`, nil, 201, &second)
+	png, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "pixel.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write(png); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1/projects/"+first.ID+"/assets", &body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 201 {
+		t.Fatalf("upload status=%d", resp.StatusCode)
+	}
+	var asset struct{ ID, MIME string }
+	if err = json.NewDecoder(resp.Body).Decode(&asset); err != nil {
+		t.Fatal(err)
+	}
+	if asset.MIME != "image/png" {
+		t.Fatalf("mime=%s", asset.MIME)
+	}
+	request(t, http.MethodGet, server.URL+"/api/v1/projects/"+first.ID+"/assets/"+asset.ID, "", nil, 200, nil)
+	request(t, http.MethodGet, server.URL+"/api/v1/projects/"+second.ID+"/assets/"+asset.ID, "", nil, 404, nil)
 }
 func request(t *testing.T, method, url, body string, headers map[string]string, want int, out any) {
 	t.Helper()

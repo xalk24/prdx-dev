@@ -1,6 +1,8 @@
 package presentator
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -13,6 +15,8 @@ type Store struct {
 	jobs        map[string]Job
 	idempotency map[string]string
 	applies     map[string]applyRecord
+	assets      map[string]Asset
+	assetBytes  map[string]int
 }
 
 type applyRecord struct {
@@ -21,7 +25,7 @@ type applyRecord struct {
 }
 
 func NewStore() *Store {
-	return &Store{projects: map[string]Project{}, jobs: map[string]Job{}, idempotency: map[string]string{}, applies: map[string]applyRecord{}}
+	return &Store{projects: map[string]Project{}, jobs: map[string]Job{}, idempotency: map[string]string{}, applies: map[string]applyRecord{}, assets: map[string]Asset{}, assetBytes: map[string]int{}}
 }
 func (s *Store) id(prefix string) string { return fmt.Sprintf("%s-%d", prefix, s.seq.Add(1)) }
 func (s *Store) CreateProject(title string, deck Deck) Project {
@@ -118,4 +122,58 @@ func (s *Store) ApplyCandidate(jobID, key, fingerprint string, base int, deck De
 	s.projects[project.ID] = project
 	s.applies[idempotencyID] = applyRecord{fingerprint: fingerprint, project: project}
 	return project, nil
+}
+
+const MaxProjectAssetBytes = 100 << 20
+
+func (s *Store) CreateAsset(projectID, mime string, data []byte) (Asset, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.projects[projectID]; !ok {
+		return Asset{}, ErrNotFound
+	}
+	if s.assetBytes[projectID]+len(data) > MaxProjectAssetBytes {
+		return Asset{}, ErrConflict
+	}
+	asset := Asset{ID: s.id("asset"), ProjectID: projectID, MIME: mime, Size: len(data), Data: append([]byte(nil), data...)}
+	s.assets[asset.ID] = asset
+	s.assetBytes[projectID] += len(data)
+	return asset, nil
+}
+
+func (s *Store) Asset(projectID, assetID string) (Asset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	asset, ok := s.assets[assetID]
+	if !ok || asset.ProjectID != projectID {
+		return Asset{}, ErrNotFound
+	}
+	asset.Data = append([]byte(nil), asset.Data...)
+	return asset, nil
+}
+
+func (s *Store) RendererAssets(projectID string, deck Deck) (map[string]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := map[string]string{}
+	for _, slide := range deck.Slides {
+		for _, raw := range slide.Elements {
+			var ref struct {
+				Type    string `json:"type"`
+				AssetID string `json:"assetId"`
+			}
+			if err := json.Unmarshal(raw, &ref); err != nil {
+				return nil, err
+			}
+			if ref.Type != "image" {
+				continue
+			}
+			asset, ok := s.assets[ref.AssetID]
+			if !ok || asset.ProjectID != projectID {
+				return nil, ErrAssetMissing
+			}
+			result[asset.ID] = "data:" + asset.MIME + ";base64," + base64.StdEncoding.EncodeToString(asset.Data)
+		}
+	}
+	return result, nil
 }

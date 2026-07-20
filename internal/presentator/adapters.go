@@ -31,7 +31,7 @@ func (FixturePredictorX) Generate(ctx Context, req GenerationRequest, base Deck)
 // MinimalPDF is a dependency-free gate renderer. Production replaces this port with Chromium.
 type MinimalPDF struct{}
 
-func (MinimalPDF) Render(ctx Context, deck Deck) ([]byte, error) {
+func (MinimalPDF) Render(ctx Context, deck Deck, _ map[string]string) ([]byte, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -70,7 +70,6 @@ func pdfEscape(s string) string {
 type ChromiumPDF struct {
 	NodePath   string
 	ScriptPath string
-	Assets     map[string]string
 }
 
 func (c ChromiumPDF) Ready(ctx context.Context) error {
@@ -94,7 +93,7 @@ func (c ChromiumPDF) Ready(ctx context.Context) error {
 	return nil
 }
 
-func (c ChromiumPDF) Render(ctx Context, deck Deck) ([]byte, error) {
+func (c ChromiumPDF) Render(ctx Context, deck Deck, assets map[string]string) ([]byte, error) {
 	processContext, ok := ctx.(context.Context)
 	if !ok {
 		return nil, errors.New("chromium renderer requires context.Context")
@@ -103,7 +102,7 @@ func (c ChromiumPDF) Render(ctx Context, deck Deck) ([]byte, error) {
 	payload, err := json.Marshal(struct {
 		Deck   Deck              `json:"deck"`
 		Assets map[string]string `json:"assets"`
-	}{Deck: deck, Assets: c.Assets})
+	}{Deck: deck, Assets: assets})
 	if err != nil {
 		return nil, fmt.Errorf("encode renderer request: %w", err)
 	}

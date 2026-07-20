@@ -8,7 +8,7 @@ import (
 
 func TestMinimalPDF(t *testing.T) {
 	deck := Deck{Slides: []Slide{{ID: "s1", Name: "First (deck)"}, {ID: "s2", Name: "Second"}}}
-	got, err := (MinimalPDF{}).Render(context.Background(), deck)
+	got, err := (MinimalPDF{}).Render(context.Background(), deck, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

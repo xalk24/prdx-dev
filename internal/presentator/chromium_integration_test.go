@@ -3,9 +3,12 @@
 package presentator
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,11 +51,41 @@ func TestChromiumPDFReadinessAndArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 	deck := validDeck()
-	pdf, err := renderer.Render(ctx, deck)
+	pdf, err := renderer.Render(ctx, deck, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(pdf) < 500 {
 		t.Fatalf("PDF is unexpectedly small: %d", len(pdf))
+	}
+}
+
+func TestRuntimeAssetIsEmbeddedInPDF(t *testing.T) {
+	store := NewStore()
+	deck := validDeck()
+	project := store.CreateProject("asset PDF", deck)
+	png, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset, err := store.CreateAsset(project.ID, "image/png", png)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deck.DeckID = project.ID
+	deck.Slides[0].Elements = []json.RawMessage{json.RawMessage(`{"id":"image","type":"image","frame":{"x":80,"y":80,"width":800,"height":600},"visible":true,"locked":false,"assetId":"` + asset.ID + `","fit":"cover"}`)}
+	assets, err := store.RendererAssets(project.ID, deck)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renderer := ChromiumPDF{NodePath: "node", ScriptPath: "../../scripts/render-pdf.mjs"}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pdf, err := renderer.Render(ctx, deck, assets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(pdf, []byte("/Subtype /Image")) {
+		t.Fatal("PDF does not contain an embedded image object")
 	}
 }

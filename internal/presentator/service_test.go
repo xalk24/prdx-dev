@@ -2,6 +2,7 @@ package presentator
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -52,6 +53,32 @@ func TestServiceJobTimeoutDoesNotStopOtherWorkers(t *testing.T) {
 	}
 	if job.Status != "failed" || job.Error == nil || job.Error.Code != "timeout" {
 		t.Fatalf("job=%+v", job)
+	}
+}
+
+func TestExportFailsClosedWhenAssetIsMissing(t *testing.T) {
+	store := NewStore()
+	svc := NewService(store, FixturePredictorX{}, MinimalPDF{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go svc.Run(ctx)
+	deck := validDeck()
+	deck.Slides[0].Elements = []json.RawMessage{json.RawMessage(`{"id":"image","type":"image","frame":{"x":0,"y":0,"width":100,"height":100},"visible":true,"locked":false,"assetId":"missing","fit":"cover"}`)}
+	p := store.CreateProject("missing", deck)
+	job, err := svc.EnqueueExport(p.ID, "export-missing", p.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		job, _ = store.Job(job.ID)
+		if job.Status == "failed" {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if job.Status != "failed" || job.Error == nil || job.Error.Code != "asset_missing" || len(job.Artifact) != 0 {
+		t.Fatalf("job did not fail closed: %+v", job)
 	}
 }
 

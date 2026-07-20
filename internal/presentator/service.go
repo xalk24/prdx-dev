@@ -3,6 +3,7 @@ package presentator
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -109,11 +110,18 @@ func (s *Service) run(ctx context.Context, w work) {
 			j.Candidate = &d
 		}
 	} else if err == nil {
-		j.Artifact, err = s.pdf.Render(jobCtx, p.Deck)
+		var assets map[string]string
+		assets, err = s.store.RendererAssets(j.ProjectID, p.Deck)
+		if err == nil {
+			j.Artifact, err = s.pdf.Render(jobCtx, p.Deck, assets)
+		}
 	}
 	if err != nil {
 		j.Status = "failed"
 		code := "internal"
+		if errors.Is(err, ErrAssetMissing) {
+			code = "asset_missing"
+		}
 		if jobCtx.Err() != nil {
 			code = "timeout"
 		}

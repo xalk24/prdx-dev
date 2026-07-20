@@ -12,6 +12,7 @@ var (
 	ErrConflict            = errors.New("revision conflict")
 	ErrQueueFull           = errors.New("job queue full")
 	ErrIdempotencyConflict = errors.New("idempotency key reused with different payload")
+	ErrAssetMissing        = errors.New("asset missing")
 )
 
 type Deck struct {
@@ -68,6 +69,14 @@ type Comment struct {
 type Anchor struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
+}
+
+type Asset struct {
+	ID        string `json:"id"`
+	ProjectID string `json:"projectId"`
+	MIME      string `json:"mime"`
+	Size      int    `json:"size"`
+	Data      []byte `json:"-"`
 }
 
 func (d Deck) Validate() error {
@@ -180,7 +189,7 @@ type PredictorXPort interface {
 	Generate(ctx Context, request GenerationRequest, base Deck) (Deck, error)
 }
 type PDFPort interface {
-	Render(ctx Context, deck Deck) ([]byte, error)
+	Render(ctx Context, deck Deck, assets map[string]string) ([]byte, error)
 }
 type Context interface {
 	Done() <-chan struct{}
