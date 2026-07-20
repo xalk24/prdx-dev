@@ -1,0 +1,67 @@
+openapi: 3.1.0
+info: {title: Presentator API, version: 1.0.0}
+servers: [{url: /api/v1}]
+paths:
+  /healthz:
+    get:
+      operationId: health
+      responses: {'200': {description: healthy}}
+  /projects:
+    post:
+      operationId: createProject
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateProject'}}}}
+      responses: {'201': {description: created, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}, '400': {$ref: '#/components/responses/Error'}}
+  /projects/{projectId}/deck:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}]
+    get:
+      operationId: getDeck
+      responses: {'200': {description: deck snapshot, headers: {ETag: {schema: {type: string}}}, content: {application/json: {schema: {$ref: '#/components/schemas/DeckSnapshot'}}}}, '404': {$ref: '#/components/responses/Error'}}
+    put:
+      operationId: saveDeck
+      parameters: [{name: If-Match, in: header, required: true, schema: {type: string}}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: './deck.schema.json'}}}}
+      responses: {'200': {description: saved, content: {application/json: {schema: {$ref: '#/components/schemas/DeckSnapshot'}}}}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}}
+  /projects/{projectId}/generation-jobs:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}]
+    post:
+      operationId: createGenerationJob
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateGenerationJob'}}}}
+      responses: {'202': {description: accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Job'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /generation-jobs/{jobId}:
+    get:
+      operationId: getGenerationJob
+      parameters: [{$ref: '#/components/parameters/JobID'}]
+      responses: {'200': {description: job, content: {application/json: {schema: {$ref: '#/components/schemas/Job'}}}}, '404': {$ref: '#/components/responses/Error'}}
+  /generation-jobs/{jobId}/candidate:
+    get:
+      operationId: getCandidate
+      parameters: [{$ref: '#/components/parameters/JobID'}]
+      responses: {'200': {description: candidate deck, content: {application/json: {schema: {$ref: './deck.schema.json'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /generation-jobs/{jobId}/apply:
+    post:
+      operationId: applyCandidate
+      parameters: [{$ref: '#/components/parameters/JobID'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [baseRevision], properties: {baseRevision: {type: integer, minimum: 1}}}}}}
+      responses: {'200': {description: applied, content: {application/json: {schema: {$ref: '#/components/schemas/DeckSnapshot'}}}}, '409': {$ref: '#/components/responses/Error'}}
+  /projects/{projectId}/export-jobs:
+    parameters: [{$ref: '#/components/parameters/ProjectID'}]
+    post:
+      operationId: createExportJob
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [revision], properties: {revision: {type: integer, minimum: 1}}}}}}
+      responses: {'202': {description: accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Job'}}}}}
+components:
+  parameters:
+    ProjectID: {name: projectId, in: path, required: true, schema: {type: string}}
+    JobID: {name: jobId, in: path, required: true, schema: {type: string}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 200}}
+  schemas:
+    CreateProject: {type: object, additionalProperties: false, required: [title], properties: {title: {type: string, minLength: 1, maxLength: 200}}}
+    Project: {type: object, required: [id, title, revision], properties: {id: {type: string}, title: {type: string}, revision: {type: integer}}}
+    DeckSnapshot: {type: object, required: [deck, revision], properties: {deck: {$ref: './deck.schema.json'}, revision: {type: integer, minimum: 1}}}
+    CreateGenerationJob: {type: object, additionalProperties: false, required: [brief], properties: {brief: {type: string, minLength: 1, maxLength: 20000}, locale: {type: string, default: ru}, profile: {type: string, default: default}}}
+    Job: {type: object, required: [id, projectId, type, status], properties: {id: {type: string}, projectId: {type: string}, type: {enum: [generation, export]}, status: {enum: [queued, running, succeeded, failed, cancelled]}, baseRevision: {type: integer}, error: {type: object, properties: {code: {type: string}, message: {type: string}, retryable: {type: boolean}}}}}
+    ErrorEnvelope: {type: object, required: [error, correlationId], properties: {error: {type: object, required: [code, message, retryable], properties: {code: {type: string}, message: {type: string}, retryable: {type: boolean}}}, correlationId: {type: string}}}
+  responses:
+    Error: {description: error, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}}}}
