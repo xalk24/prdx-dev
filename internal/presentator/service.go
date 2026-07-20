@@ -2,6 +2,8 @@ package presentator
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -100,6 +102,7 @@ func (s *Service) run(ctx context.Context, w work) {
 		var d Deck
 		d, err = s.predictor.Generate(jobCtx, *w.generation, p.Deck)
 		if err == nil {
+			d.Normalize()
 			err = d.Validate()
 		}
 		if err == nil {
@@ -120,7 +123,7 @@ func (s *Service) run(ctx context.Context, w work) {
 	}
 	s.store.UpdateJob(j)
 }
-func (s *Service) Apply(jobID string, base int) (Project, error) {
+func (s *Service) Apply(jobID, key string, base int) (Project, error) {
 	j, err := s.store.Job(jobID)
 	if err != nil {
 		return Project{}, err
@@ -128,5 +131,6 @@ func (s *Service) Apply(jobID string, base int) (Project, error) {
 	if j.Status != "succeeded" || j.Candidate == nil {
 		return Project{}, ErrConflict
 	}
-	return s.store.SaveDeck(j.ProjectID, base, *j.Candidate)
+	fingerprint := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%s:%d", jobID, base))))
+	return s.store.ApplyCandidate(jobID, key, fingerprint, base, *j.Candidate)
 }

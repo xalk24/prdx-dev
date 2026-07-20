@@ -46,10 +46,20 @@ func TestVerticalSlice(t *testing.T) {
 	if job.Status != "succeeded" {
 		t.Fatalf("job status=%s", job.Status)
 	}
+	var candidate presentator.Deck
+	request(t, http.MethodGet, server.URL+"/api/v1/generation-jobs/"+job.ID+"/candidate", "", nil, http.StatusOK, &candidate)
+	if candidate.Comments == nil || candidate.Slides == nil || candidate.Slides[0].Elements == nil {
+		t.Fatal("candidate arrays were not normalized")
+	}
 	request(t, http.MethodPost, server.URL+"/api/v1/generation-jobs/"+job.ID+"/apply", `{"baseRevision":2}`, map[string]string{"Idempotency-Key": "apply-1"}, http.StatusOK, &snapshot)
 	if snapshot.Revision != 3 {
 		t.Fatalf("revision=%d", snapshot.Revision)
 	}
+	request(t, http.MethodPost, server.URL+"/api/v1/generation-jobs/"+job.ID+"/apply", `{"baseRevision":2}`, map[string]string{"Idempotency-Key": "apply-1"}, http.StatusOK, &snapshot)
+	if snapshot.Revision != 3 {
+		t.Fatalf("replay revision=%d", snapshot.Revision)
+	}
+	request(t, http.MethodPost, server.URL+"/api/v1/generation-jobs/"+job.ID+"/apply", `{"baseRevision":3}`, map[string]string{"Idempotency-Key": "apply-1"}, http.StatusConflict, nil)
 	var export presentator.Job
 	request(t, http.MethodPost, server.URL+"/api/v1/projects/"+project.ID+"/export-jobs", `{"revision":3}`, map[string]string{"Idempotency-Key": "export-1"}, http.StatusAccepted, &export)
 	for time.Now().Before(deadline.Add(time.Second)) {
@@ -110,6 +120,14 @@ func TestStrictRequestValidation(t *testing.T) {
 			request(t, http.MethodPost, server.URL+"/api/v1/projects", tt.body, tt.headers, http.StatusBadRequest, nil)
 		})
 	}
+}
+
+func TestApplyRequiresIdempotencyKey(t *testing.T) {
+	store := presentator.NewStore()
+	svc := presentator.NewService(store, presentator.FixturePredictorX{}, presentator.MinimalPDF{})
+	server := httptest.NewServer(httpapi.New(store, svc))
+	defer server.Close()
+	request(t, http.MethodPost, server.URL+"/api/v1/generation-jobs/missing/apply", `{"baseRevision":1}`, nil, http.StatusBadRequest, nil)
 }
 func request(t *testing.T, method, url, body string, headers map[string]string, want int, out any) {
 	t.Helper()

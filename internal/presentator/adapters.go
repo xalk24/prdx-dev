@@ -21,6 +21,7 @@ func (FixturePredictorX) Generate(ctx Context, req GenerationRequest, base Deck)
 	}
 	d := base
 	d.Comments = nil
+	d.Normalize()
 	return d, nil
 }
 

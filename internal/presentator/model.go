@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 )
 
 var (
-	ErrNotFound  = errors.New("not found")
-	ErrConflict  = errors.New("revision conflict")
-	ErrQueueFull = errors.New("job queue full")
+	ErrNotFound            = errors.New("not found")
+	ErrConflict            = errors.New("revision conflict")
+	ErrQueueFull           = errors.New("job queue full")
+	ErrIdempotencyConflict = errors.New("idempotency key reused with different payload")
 )
 
 type Deck struct {
@@ -85,10 +87,7 @@ func (d Deck) Validate() error {
 		}
 		seen[s.ID] = true
 		for _, raw := range s.Elements {
-			var h struct {
-				Type string `json:"type"`
-			}
-			if json.Unmarshal(raw, &h) != nil || (h.Type != "text" && h.Type != "image" && h.Type != "shape") {
+			if validateElement(raw) != nil {
 				return errors.New("unsupported element")
 			}
 		}
@@ -99,6 +98,55 @@ func (d Deck) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (d *Deck) Normalize() {
+	if d.Slides == nil {
+		d.Slides = []Slide{}
+	}
+	if d.Comments == nil {
+		d.Comments = []Comment{}
+	}
+	if d.Theme.Palette == nil {
+		d.Theme.Palette = map[string]string{}
+	}
+	for i := range d.Slides {
+		if d.Slides[i].Elements == nil {
+			d.Slides[i].Elements = []json.RawMessage{}
+		}
+	}
+}
+
+func validateElement(raw json.RawMessage) error {
+	var value struct {
+		ID    string `json:"id"`
+		Type  string `json:"type"`
+		Frame struct {
+			X      float64 `json:"x"`
+			Y      float64 `json:"y"`
+			Width  float64 `json:"width"`
+			Height float64 `json:"height"`
+		} `json:"frame"`
+	}
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if value.ID == "" || !finite(value.Frame.X, value.Frame.Y, value.Frame.Width, value.Frame.Height) || value.Frame.Width <= 0 || value.Frame.Height <= 0 {
+		return errors.New("invalid element")
+	}
+	if value.Type != "text" && value.Type != "image" && value.Type != "shape" {
+		return errors.New("unsupported element")
+	}
+	return nil
+}
+
+func finite(values ...float64) bool {
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
+	return true
 }
 
 type Project struct {

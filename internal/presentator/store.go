@@ -12,10 +12,16 @@ type Store struct {
 	projects    map[string]Project
 	jobs        map[string]Job
 	idempotency map[string]string
+	applies     map[string]applyRecord
+}
+
+type applyRecord struct {
+	fingerprint string
+	project     Project
 }
 
 func NewStore() *Store {
-	return &Store{projects: map[string]Project{}, jobs: map[string]Job{}, idempotency: map[string]string{}}
+	return &Store{projects: map[string]Project{}, jobs: map[string]Job{}, idempotency: map[string]string{}, applies: map[string]applyRecord{}}
 }
 func (s *Store) id(prefix string) string { return fmt.Sprintf("%s-%d", prefix, s.seq.Add(1)) }
 func (s *Store) CreateProject(title string, deck Deck) Project {
@@ -84,3 +90,32 @@ func (s *Store) Job(id string) (Job, error) {
 	return j, nil
 }
 func (s *Store) UpdateJob(j Job) { s.mu.Lock(); defer s.mu.Unlock(); s.jobs[j.ID] = j }
+
+func (s *Store) ApplyCandidate(jobID, key, fingerprint string, base int, deck Deck) (Project, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idempotencyID := jobID + ":" + key
+	if previous, ok := s.applies[idempotencyID]; ok {
+		if previous.fingerprint != fingerprint {
+			return Project{}, ErrIdempotencyConflict
+		}
+		return previous.project, nil
+	}
+	job, ok := s.jobs[jobID]
+	if !ok {
+		return Project{}, ErrNotFound
+	}
+	project, ok := s.projects[job.ProjectID]
+	if !ok {
+		return Project{}, ErrNotFound
+	}
+	if project.Revision != base {
+		return Project{}, ErrConflict
+	}
+	project.Revision++
+	deck.DeckID = project.ID
+	project.Deck = deck
+	s.projects[project.ID] = project
+	s.applies[idempotencyID] = applyRecord{fingerprint: fingerprint, project: project}
+	return project, nil
+}

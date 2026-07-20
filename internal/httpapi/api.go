@@ -118,6 +118,11 @@ func (a *API) candidate(w http.ResponseWriter, r *http.Request) {
 	write(w, 200, j.Candidate)
 }
 func (a *API) apply(w http.ResponseWriter, r *http.Request) {
+	key := r.Header.Get("Idempotency-Key")
+	if key == "" || len(key) > 200 {
+		problem(w, r, 400, "idempotency_key_required", "Idempotency-Key must contain 1..200 characters", false)
+		return
+	}
 	var req struct {
 		Base int `json:"baseRevision"`
 	}
@@ -125,7 +130,7 @@ func (a *API) apply(w http.ResponseWriter, r *http.Request) {
 		problem(w, r, 400, "invalid_input", "baseRevision is required", false)
 		return
 	}
-	p, err := a.service.Apply(r.PathValue("jobId"), req.Base)
+	p, err := a.service.Apply(r.PathValue("jobId"), key, req.Base)
 	if err != nil {
 		problemFor(w, r, err)
 		return
@@ -209,6 +214,8 @@ func problemFor(w http.ResponseWriter, r *http.Request, err error) {
 		problem(w, r, 409, "conflict", "resource state conflicts with request", true)
 	case errors.Is(err, presentator.ErrQueueFull):
 		problem(w, r, 503, "queue_full", "job queue is full", true)
+	case errors.Is(err, presentator.ErrIdempotencyConflict):
+		problem(w, r, 409, "idempotency_conflict", "Idempotency-Key was already used with a different payload", false)
 	default:
 		problem(w, r, 500, "internal", "internal error", true)
 	}
