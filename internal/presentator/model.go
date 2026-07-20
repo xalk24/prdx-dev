@@ -128,9 +128,22 @@ func (d *Deck) Normalize() {
 
 func validateElement(raw json.RawMessage) error {
 	var value struct {
-		ID    string `json:"id"`
-		Type  string `json:"type"`
-		Frame struct {
+		ID      string `json:"id"`
+		Type    string `json:"type"`
+		AssetID string `json:"assetId"`
+		Fit     string `json:"fit"`
+		Crop    *struct {
+			Version string  `json:"version"`
+			X       float64 `json:"x"`
+			Y       float64 `json:"y"`
+			Width   float64 `json:"width"`
+			Height  float64 `json:"height"`
+		} `json:"crop"`
+		Shape       string  `json:"shape"`
+		Stroke      string  `json:"stroke"`
+		StrokeWidth float64 `json:"strokeWidth"`
+		Opacity     float64 `json:"opacity"`
+		Frame       struct {
 			X      float64 `json:"x"`
 			Y      float64 `json:"y"`
 			Width  float64 `json:"width"`
@@ -143,10 +156,31 @@ func validateElement(raw json.RawMessage) error {
 	if value.ID == "" || !finite(value.Frame.X, value.Frame.Y, value.Frame.Width, value.Frame.Height) || value.Frame.Width <= 0 || value.Frame.Height <= 0 {
 		return errors.New("invalid element")
 	}
-	if value.Type != "text" && value.Type != "image" && value.Type != "shape" {
+	switch value.Type {
+	case "text":
+		return nil
+	case "image":
+		if value.AssetID == "" || (value.Fit != "contain" && value.Fit != "cover") {
+			return errors.New("invalid image element")
+		}
+		if value.Crop != nil {
+			crop := value.Crop
+			if crop.Version != "1.0" || !finite(crop.X, crop.Y, crop.Width, crop.Height) || crop.X < 0 || crop.Y < 0 || crop.Width <= 0 || crop.Height <= 0 || crop.X+crop.Width > 1 || crop.Y+crop.Height > 1 {
+				return errors.New("invalid image crop")
+			}
+		}
+		return nil
+	case "shape":
+		if value.Shape != "rect" && value.Shape != "ellipse" && value.Shape != "line" {
+			return errors.New("invalid shape element")
+		}
+		if value.Stroke == "" || !finite(value.StrokeWidth, value.Opacity) || value.StrokeWidth < 0 || value.Opacity < 0 || value.Opacity > 1 {
+			return errors.New("invalid shape style")
+		}
+		return nil
+	default:
 		return errors.New("unsupported element")
 	}
-	return nil
 }
 
 func finite(values ...float64) bool {

@@ -35,6 +35,18 @@
 				"height": { "type": "number", "exclusiveMinimum": 0 }
 			}
 		},
+		"crop": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "x", "y", "width", "height"],
+			"properties": {
+				"version": { "const": "1.0" },
+				"x": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+				"y": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+				"width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+				"height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+			}
+		},
 		"theme": {
 			"type": "object",
 			"additionalProperties": false,
@@ -116,7 +128,8 @@
 						"visible": { "type": "boolean" },
 						"locked": { "type": "boolean" },
 						"assetId": { "type": "string", "minLength": 1 },
-						"fit": { "enum": ["contain", "cover"] }
+						"fit": { "enum": ["contain", "cover"] },
+						"crop": { "$ref": "#/$defs/crop" }
 					}
 				}
 			]
