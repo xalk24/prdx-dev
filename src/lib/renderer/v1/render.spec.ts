@@ -37,7 +37,8 @@ const deck: ContractDeck = {
 					visible: true,
 					locked: false,
 					assetId: 'asset one',
-					fit: 'cover'
+					fit: 'cover',
+					crop: { version: '1.0', x: 0.1, y: 0.2, width: 0.5, height: 0.5 }
 				},
 				{
 					id: 'rect',
@@ -71,8 +72,8 @@ const deck: ContractDeck = {
 					locked: false,
 					shape: 'line',
 					fill: '#000000',
-					stroke: '#000000',
-					strokeWidth: 2,
+					stroke: '#D92D20',
+					strokeWidth: 7,
 					opacity: 1
 				}
 			]
@@ -86,10 +87,20 @@ describe('scene renderer v1', () => {
 		expect(html).toContain(`data-renderer-version="${SCENE_RENDERER_VERSION}"`);
 		expect(html).toContain('@page{size:1920px 1080px;margin:0}');
 		expect(html).toContain('Text &lt;safe&gt;');
-		expect(html).toContain('object-fit:cover');
+		expect(html).toContain('data-crop-version="1.0"');
+		expect(html).toContain('left:-20%;top:-40%;width:200%;height:200%');
 		expect(html).toContain('/api/v1/assets/asset%20one');
+		expect(html).toContain('data-asset-id="asset one"');
+		expect(html).toContain('window.__PRESENTATOR_RENDER_READY__');
+		expect(html).toContain('image.naturalWidth>0');
+		expect(html).toContain('asset_load_failed:');
+		expect(html).toContain("@font-face{font-family:Inter;src:url('data:font/woff2;base64,");
+		expect(html).toContain('document.fonts.check');
+		expect(html).toContain('font_family_mismatch:');
 		expect(html).toContain('scene-shape ellipse');
 		expect(html).toContain('scene-shape line');
+		expect(html).toContain('height:7px;background:#D92D20');
+		expect(html).not.toContain('.scene-shape.line{');
 	});
 	it('is byte-stable and escapes untrusted content', () => {
 		const once = renderDeckHtml(deck);

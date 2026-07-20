@@ -36,7 +36,8 @@ const fixture: ContractDeck = {
 					visible: true,
 					locked: false,
 					assetId: 'asset-9',
-					fit: 'cover'
+					fit: 'cover',
+					crop: { version: '1.0', x: 0.1, y: 0.15, width: 0.75, height: 0.7 }
 				},
 				{
 					id: 'shape-1',

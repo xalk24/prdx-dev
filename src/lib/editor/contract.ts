@@ -26,6 +26,13 @@ export interface ImageElement extends BaseElement {
 	type: 'image';
 	assetId: string;
 	fit: 'contain' | 'cover';
+	crop?: {
+		version: '1.0';
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	};
 }
 export interface ShapeElement extends BaseElement {
 	type: 'shape';
