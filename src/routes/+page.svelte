@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { ApiError, PresentatorApi, waitForJob } from '$lib/editor/api';
 	import { fromContract, toContract, type ContractDeck } from '$lib/editor/contract';
+	import { renderDeckHtml } from '$lib/renderer/v1/render';
 	import {
 		cloneDeck,
 		duplicateSlide,
@@ -30,6 +31,9 @@
 	let timer: ReturnType<typeof setTimeout>;
 	let slide = $derived(deck.slides[slideIndex]);
 	let selected = $derived(slide?.elements.find((e) => e.id === selectedId));
+	let previewHtml = $derived(
+		canonical ? renderDeckHtml(canonical, { title: deck.title, slideId: slide?.id }) : ''
+	);
 	onMount(async () => {
 		try {
 			projectId = localStorage.getItem('presentator-project') ?? '';
@@ -272,28 +276,34 @@
 					role="application"
 					aria-label={`Slide ${slideIndex + 1}: ${slide.title}`}
 				>
-					{#each slide.elements as element (element.id)}{#if !element.hidden}<button
-								class="element"
-								class:headline={element.name === 'Headline'}
-								class:body={element.id === 'body'}
-								class:eyebrow={element.id === 'eyebrow'}
-								class:shape={element.kind === 'shape'}
-								class:selected-element={element.id === selectedId && mode === 'edit'}
-								style={style(element)}
-								disabled={mode === 'preview'}
-								onclick={() => {
-									selectedId = element.id;
-									tab = 'design';
-								}}
-								>{#if element.kind === 'shape'}<b>{element.content}</b><small>teams aligned</small>
-									<hr
-									/>{:else}{element.content}{/if}{#if element.id === selectedId && mode === 'edit'}<i
-										class="tl"
-									></i><i class="tr"></i><i class="bl"></i><i class="br"></i>{/if}</button
-							>{/if}{/each}
-					<div class="meta">
-						<span>{String(slideIndex + 1).padStart(2, '0')}</span><span>PRESENTATOR</span>
-					</div>
+					{#if mode === 'preview' && previewHtml}
+						<iframe class="scene-preview" title={`Preview of ${deck.title}`} srcdoc={previewHtml}
+						></iframe>
+					{:else}
+						{#each slide.elements as element (element.id)}{#if !element.hidden}<button
+									class="element"
+									class:headline={element.name === 'Headline'}
+									class:body={element.id === 'body'}
+									class:eyebrow={element.id === 'eyebrow'}
+									class:shape={element.kind === 'shape'}
+									class:selected-element={element.id === selectedId && mode === 'edit'}
+									style={style(element)}
+									disabled={mode === 'preview'}
+									onclick={() => {
+										selectedId = element.id;
+										tab = 'design';
+									}}
+									>{#if element.kind === 'shape'}<b>{element.content}</b><small>teams aligned</small
+										>
+										<hr
+										/>{:else}{element.content}{/if}{#if element.id === selectedId && mode === 'edit'}<i
+											class="tl"
+										></i><i class="tr"></i><i class="bl"></i><i class="br"></i>{/if}</button
+								>{/if}{/each}
+						<div class="meta">
+							<span>{String(slideIndex + 1).padStart(2, '0')}</span><span>PRESENTATOR</span>
+						</div>
+					{/if}
 				</div>
 			</div>
 			<div class="zoom">
