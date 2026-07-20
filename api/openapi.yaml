@@ -51,6 +51,16 @@ paths:
       parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
       requestBody: {required: true, content: {application/json: {schema: {type: object, required: [revision], properties: {revision: {type: integer, minimum: 1}}}}}}
       responses: {'202': {description: accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Job'}}}}}
+  /export-jobs/{jobId}:
+    get:
+      operationId: getExportJob
+      parameters: [{$ref: '#/components/parameters/JobID'}]
+      responses: {'200': {description: export status, content: {application/json: {schema: {$ref: '#/components/schemas/Job'}}}}, '404': {$ref: '#/components/responses/Error'}}
+  /export-jobs/{jobId}/download:
+    get:
+      operationId: downloadExport
+      parameters: [{$ref: '#/components/parameters/JobID'}]
+      responses: {'200': {description: immutable PDF artifact, content: {application/pdf: {schema: {type: string, contentEncoding: binary}}}}, '409': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
 components:
   parameters:
     ProjectID: {name: projectId, in: path, required: true, schema: {type: string}}

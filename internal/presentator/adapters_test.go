@@ -7,13 +7,20 @@ import (
 )
 
 func TestMinimalPDF(t *testing.T) {
-	deck := Deck{Slides: []Slide{{ID: "s", Name: "A (deck)"}}}
+	deck := Deck{Slides: []Slide{{ID: "s1", Name: "First (deck)"}, {ID: "s2", Name: "Second"}}}
 	got, err := (MinimalPDF{}).Render(context.Background(), deck)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(string(got), "%PDF-1.4") || !strings.HasSuffix(string(got), "%%EOF\n") {
 		t.Fatal("invalid PDF envelope")
+	}
+	pdf := string(got)
+	if !strings.Contains(pdf, "/Count 2") || !strings.Contains(pdf, "First \\(deck\\)") {
+		t.Fatal("PDF page count or escaped content is invalid")
+	}
+	if strings.Index(pdf, "First") >= strings.Index(pdf, "Second") {
+		t.Fatal("PDF slide order is invalid")
 	}
 }
 func TestDeckValidate(t *testing.T) {

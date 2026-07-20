@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,6 +29,8 @@ func New(store *presentator.Store, service *presentator.Service) http.Handler {
 	m.HandleFunc("GET /api/v1/generation-jobs/{jobId}/candidate", a.candidate)
 	m.HandleFunc("POST /api/v1/generation-jobs/{jobId}/apply", a.apply)
 	m.HandleFunc("POST /api/v1/projects/{projectId}/export-jobs", a.createExport)
+	m.HandleFunc("GET /api/v1/export-jobs/{jobId}", a.getExportJob)
+	m.HandleFunc("GET /api/v1/export-jobs/{jobId}/download", a.downloadExport)
 	return http.MaxBytesHandler(m, 2<<20)
 }
 func (a *API) health(w http.ResponseWriter, _ *http.Request) {
@@ -37,7 +40,7 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 	var v struct {
 		Title string `json:"title"`
 	}
-	if decode(r, &v) != nil || strings.TrimSpace(v.Title) == "" {
+	if decode(r, &v) != nil || strings.TrimSpace(v.Title) == "" || len(v.Title) > 200 {
 		problem(w, r, 400, "invalid_input", "title is required", false)
 		return
 	}
@@ -78,7 +81,7 @@ func (a *API) saveDeck(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) createGeneration(w http.ResponseWriter, r *http.Request) {
 	key := r.Header.Get("Idempotency-Key")
-	if key == "" {
+	if key == "" || len(key) > 200 {
 		problem(w, r, 400, "idempotency_key_required", "Idempotency-Key is required", false)
 		return
 	}
@@ -134,7 +137,7 @@ func (a *API) createExport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Revision int `json:"revision"`
 	}
-	if key == "" || decode(r, &req) != nil {
+	if key == "" || len(key) > 200 || decode(r, &req) != nil {
 		problem(w, r, 400, "invalid_input", "idempotency key and revision are required", false)
 		return
 	}
@@ -145,10 +148,52 @@ func (a *API) createExport(w http.ResponseWriter, r *http.Request) {
 	}
 	write(w, 202, j)
 }
+func (a *API) getExportJob(w http.ResponseWriter, r *http.Request) {
+	j, err := a.store.Job(r.PathValue("jobId"))
+	if err != nil {
+		problemFor(w, r, err)
+		return
+	}
+	if j.Type != "export" {
+		problem(w, r, 404, "not_found", "resource not found", false)
+		return
+	}
+	write(w, 200, j)
+}
+func (a *API) downloadExport(w http.ResponseWriter, r *http.Request) {
+	j, err := a.store.Job(r.PathValue("jobId"))
+	if err != nil {
+		problemFor(w, r, err)
+		return
+	}
+	if j.Type != "export" {
+		problem(w, r, 404, "not_found", "resource not found", false)
+		return
+	}
+	if j.Status != "succeeded" || len(j.Artifact) == 0 {
+		problem(w, r, 409, "artifact_not_ready", "PDF artifact is not ready", true)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=presentator-%s.pdf", j.ID))
+	w.Header().Set("Content-Length", strconv.Itoa(len(j.Artifact)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(j.Artifact)
+}
 func decode(r *http.Request, v any) error {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	return d.Decode(v)
+	if err := d.Decode(v); err != nil {
+		return err
+	}
+	var extra any
+	if err := d.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
 }
 func etag(s string) (int, error) { s = strings.Trim(s, "\""); return strconv.Atoi(s) }
 func write(w http.ResponseWriter, status int, v any) {
@@ -162,6 +207,8 @@ func problemFor(w http.ResponseWriter, r *http.Request, err error) {
 		problem(w, r, 404, "not_found", "resource not found", false)
 	case errors.Is(err, presentator.ErrConflict):
 		problem(w, r, 409, "conflict", "resource state conflicts with request", true)
+	case errors.Is(err, presentator.ErrQueueFull):
+		problem(w, r, 503, "queue_full", "job queue is full", true)
 	default:
 		problem(w, r, 500, "internal", "internal error", true)
 	}

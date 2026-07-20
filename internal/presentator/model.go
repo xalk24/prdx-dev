@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
-	ErrConflict = errors.New("revision conflict")
+	ErrNotFound  = errors.New("not found")
+	ErrConflict  = errors.New("revision conflict")
+	ErrQueueFull = errors.New("job queue full")
 )
 
 type Deck struct {

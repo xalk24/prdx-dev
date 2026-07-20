@@ -50,6 +50,30 @@ func TestVerticalSlice(t *testing.T) {
 	if snapshot.Revision != 3 {
 		t.Fatalf("revision=%d", snapshot.Revision)
 	}
+	var export presentator.Job
+	request(t, http.MethodPost, server.URL+"/api/v1/projects/"+project.ID+"/export-jobs", `{"revision":3}`, map[string]string{"Idempotency-Key": "export-1"}, http.StatusAccepted, &export)
+	for time.Now().Before(deadline.Add(time.Second)) {
+		request(t, http.MethodGet, server.URL+"/api/v1/export-jobs/"+export.ID, "", nil, http.StatusOK, &export)
+		if export.Status == "succeeded" {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	resp, err := http.Get(server.URL + "/api/v1/export-jobs/" + export.ID + "/download")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "application/pdf" {
+		t.Fatalf("download status=%d content-type=%q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	var artifact bytes.Buffer
+	if _, err := artifact.ReadFrom(resp.Body); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(artifact.Bytes(), []byte("%PDF-1.4")) {
+		t.Fatal("download is not a PDF")
+	}
 }
 func TestRevisionConflict(t *testing.T) {
 	store := presentator.NewStore()
@@ -66,6 +90,26 @@ func TestRevisionConflict(t *testing.T) {
 	request(t, http.MethodGet, server.URL+"/api/v1/projects/"+p.ID+"/deck", "", nil, 200, &snap)
 	b, _ := json.Marshal(snap.Deck)
 	request(t, http.MethodPut, server.URL+"/api/v1/projects/"+p.ID+"/deck", string(b), map[string]string{"If-Match": "99"}, 409, nil)
+}
+
+func TestStrictRequestValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		headers map[string]string
+	}{
+		{name: "title limit", body: `{"title":"` + string(bytes.Repeat([]byte("a"), 201)) + `"}`},
+		{name: "second JSON value", body: `{"title":"ok"} {"title":"extra"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := presentator.NewStore()
+			svc := presentator.NewService(store, presentator.FixturePredictorX{}, presentator.MinimalPDF{})
+			server := httptest.NewServer(httpapi.New(store, svc))
+			defer server.Close()
+			request(t, http.MethodPost, server.URL+"/api/v1/projects", tt.body, tt.headers, http.StatusBadRequest, nil)
+		})
+	}
 }
 func request(t *testing.T, method, url, body string, headers map[string]string, want int, out any) {
 	t.Helper()
