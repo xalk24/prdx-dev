@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PresentatorApi, waitForJob } from './api';
+import { PresentatorApi, projectAssetUrl, waitForJob } from './api';
+import { renderDeckHtml } from '$lib/renderer/v1/render';
 import type { ContractDeck } from './contract';
 
 const deck = {
@@ -19,6 +20,29 @@ const response = (body: unknown, status = 200) =>
 	new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
 describe('Presentator API contract', () => {
+	it('builds an encoded project-owned asset URL for Preview', () => {
+		expect(projectAssetUrl('project /one', 'asset /one')).toBe(
+			'/api/v1/projects/project%20%2Fone/assets/asset%20%2Fone'
+		);
+		const imageDeck = structuredClone(deck);
+		imageDeck.slides[0].elements = [
+			{
+				id: 'image',
+				type: 'image',
+				frame: { x: 0, y: 0, width: 100, height: 100 },
+				visible: true,
+				locked: false,
+				assetId: 'asset /one',
+				fit: 'cover'
+			}
+		];
+		const html = renderDeckHtml(imageDeck, {
+			assetUrl: (assetId) => projectAssetUrl('project /one', assetId)
+		});
+		expect(html).toContain('/api/v1/projects/project%20%2Fone/assets/asset%20%2Fone');
+		expect(html).not.toContain('src="/api/v1/assets/');
+	});
+
 	it('saves against the acknowledged revision using If-Match', async () => {
 		const fetcher = vi.fn(async () => response({ deck, revision: 13 }));
 		const api = new PresentatorApi(fetcher as typeof fetch);

@@ -18,6 +18,11 @@ export interface Project {
 	title: string;
 	revision: number;
 }
+
+export function projectAssetUrl(projectId: string, assetId: string, base = '/api/v1') {
+	return `${base}/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`;
+}
+
 export class ApiError extends Error {
 	constructor(
 		public status: number,

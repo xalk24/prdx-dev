@@ -35,6 +35,12 @@ func TestRuntimeAssetExportAndMissingAssetFailure(t *testing.T) {
 	}
 	request(t, http.MethodPost, server.URL+"/api/v1/projects", `{"title":"runtime asset"}`, nil, http.StatusCreated, &project)
 	assetID := uploadPNG(t, server.URL, project.ID)
+	request(t, http.MethodGet, server.URL+"/api/v1/projects/"+project.ID+"/assets/"+assetID, "", nil, http.StatusOK, nil)
+	var foreignProject struct {
+		ID string `json:"id"`
+	}
+	request(t, http.MethodPost, server.URL+"/api/v1/projects", `{"title":"foreign project"}`, nil, http.StatusCreated, &foreignProject)
+	request(t, http.MethodGet, server.URL+"/api/v1/projects/"+foreignProject.ID+"/assets/"+assetID, "", nil, http.StatusNotFound, nil)
 
 	var snapshot struct {
 		Deck     presentator.Deck `json:"deck"`

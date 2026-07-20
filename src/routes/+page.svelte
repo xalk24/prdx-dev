@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ApiError, PresentatorApi, waitForJob } from '$lib/editor/api';
+	import { ApiError, PresentatorApi, projectAssetUrl, waitForJob } from '$lib/editor/api';
 	import { fromContract, toContract, type ContractDeck } from '$lib/editor/contract';
 	import { renderDeckHtml } from '$lib/renderer/v1/render';
 	import {
@@ -32,7 +32,13 @@
 	let slide = $derived(deck.slides[slideIndex]);
 	let selected = $derived(slide?.elements.find((e) => e.id === selectedId));
 	let previewHtml = $derived(
-		canonical ? renderDeckHtml(canonical, { title: deck.title, slideId: slide?.id }) : ''
+		canonical
+			? renderDeckHtml(canonical, {
+					title: deck.title,
+					slideId: slide?.id,
+					assetUrl: (assetId) => projectAssetUrl(projectId, assetId)
+				})
+			: ''
 	);
 	onMount(async () => {
 		try {
