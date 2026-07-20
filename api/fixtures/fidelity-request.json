@@ -1,0 +1,84 @@
+{
+	"deck": {
+		"schemaVersion": "1.0",
+		"deckId": "golden",
+		"canvas": { "width": 1920, "height": 1080 },
+		"theme": {
+			"version": "1.0",
+			"palette": { "primary": "#2563EB" },
+			"typography": { "heading": "Arial", "body": "Arial" },
+			"background": "#FFFFFF"
+		},
+		"slides": [
+			{
+				"id": "slide-golden",
+				"name": "Golden",
+				"elements": [
+					{
+						"id": "text",
+						"type": "text",
+						"frame": { "x": 80, "y": 60, "width": 800, "height": 140 },
+						"visible": true,
+						"locked": false,
+						"content": "Preview = PDF",
+						"fontFamily": "Arial",
+						"fontSize": 64,
+						"weight": 700,
+						"color": "#112233",
+						"align": "left",
+						"lineHeight": 1.1
+					},
+					{
+						"id": "image",
+						"type": "image",
+						"frame": { "x": 80, "y": 260, "width": 360, "height": 240 },
+						"visible": true,
+						"locked": false,
+						"assetId": "image-1",
+						"fit": "cover"
+					},
+					{
+						"id": "rect",
+						"type": "shape",
+						"frame": { "x": 520, "y": 260, "width": 300, "height": 180 },
+						"visible": true,
+						"locked": false,
+						"shape": "rect",
+						"fill": "#2563EB",
+						"stroke": "#112233",
+						"strokeWidth": 8,
+						"opacity": 0.8
+					},
+					{
+						"id": "ellipse",
+						"type": "shape",
+						"frame": { "x": 900, "y": 260, "width": 240, "height": 180 },
+						"visible": true,
+						"locked": false,
+						"shape": "ellipse",
+						"fill": "#22C55E",
+						"stroke": "#112233",
+						"strokeWidth": 6,
+						"opacity": 1
+					},
+					{
+						"id": "line",
+						"type": "shape",
+						"frame": { "x": 520, "y": 560, "width": 620, "height": 10 },
+						"visible": true,
+						"locked": false,
+						"shape": "line",
+						"fill": "#000000",
+						"stroke": "#DC2626",
+						"strokeWidth": 5,
+						"opacity": 1
+					}
+				]
+			}
+		],
+		"comments": []
+	},
+	"assets": {
+		"image-1": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='240'%3E%3Crect width='360' height='240' fill='%23F59E0B'/%3E%3Ccircle cx='180' cy='120' r='70' fill='%237C3AED'/%3E%3C/svg%3E"
+	}
+}

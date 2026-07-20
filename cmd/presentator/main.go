@@ -18,7 +18,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	store := presentator.NewStore()
-	svc := presentator.NewService(store, presentator.FixturePredictorX{}, presentator.MinimalPDF{})
+	pdf := presentator.ChromiumPDF{NodePath: "node", ScriptPath: "scripts/render-pdf.mjs"}
+	readyCtx, readyCancel := context.WithTimeout(ctx, 15*time.Second)
+	if err := pdf.Ready(readyCtx); err != nil {
+		readyCancel()
+		slog.Error("PDF renderer is not ready", "error", err)
+		os.Exit(1)
+	}
+	readyCancel()
+	svc := presentator.NewService(store, presentator.FixturePredictorX{}, pdf)
 	go svc.Run(ctx)
 	addr := os.Getenv("PRESENTATOR_ADDR")
 	if addr == "" {

@@ -3,7 +3,10 @@ package presentator
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 )
 
@@ -62,6 +65,59 @@ func (MinimalPDF) Render(ctx Context, deck Deck) ([]byte, error) {
 }
 func pdfEscape(s string) string {
 	return strings.NewReplacer("\\", "\\\\", "(", "\\(", ")", "\\)").Replace(s)
+}
+
+type ChromiumPDF struct {
+	NodePath   string
+	ScriptPath string
+	Assets     map[string]string
+}
+
+func (c ChromiumPDF) Ready(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, c.NodePath, c.ScriptPath, "--ready")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("chromium readiness: %w: %s", err, output)
+	}
+	var readiness struct {
+		Ready             bool   `json:"ready"`
+		RendererVersion   string `json:"rendererVersion"`
+		PlaywrightVersion string `json:"playwrightVersion"`
+		ChromiumVersion   string `json:"chromiumVersion"`
+	}
+	if err := json.Unmarshal(output, &readiness); err != nil {
+		return fmt.Errorf("decode chromium readiness: %w", err)
+	}
+	if !readiness.Ready || readiness.RendererVersion != "1.0.0" || readiness.PlaywrightVersion != "1.60.0" || readiness.ChromiumVersion == "" {
+		return fmt.Errorf("unexpected chromium readiness: %+v", readiness)
+	}
+	return nil
+}
+
+func (c ChromiumPDF) Render(ctx Context, deck Deck) ([]byte, error) {
+	processContext, ok := ctx.(context.Context)
+	if !ok {
+		return nil, errors.New("chromium renderer requires context.Context")
+	}
+	deck.Normalize()
+	payload, err := json.Marshal(struct {
+		Deck   Deck              `json:"deck"`
+		Assets map[string]string `json:"assets"`
+	}{Deck: deck, Assets: c.Assets})
+	if err != nil {
+		return nil, fmt.Errorf("encode renderer request: %w", err)
+	}
+	cmd := exec.CommandContext(processContext, c.NodePath, c.ScriptPath)
+	cmd.Stdin = bytes.NewReader(payload)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("chromium render: %w: %.2048s", err, stderr.String())
+	}
+	if !bytes.HasPrefix(stdout.Bytes(), []byte("%PDF-")) {
+		return nil, errors.New("chromium renderer returned invalid PDF")
+	}
+	return stdout.Bytes(), nil
 }
 
 var _ context.Context

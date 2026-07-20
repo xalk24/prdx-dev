@@ -1,59 +1,195 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://presentator.dev/schemas/deck-1.0.json",
-  "title": "Presentator Deck 1.0",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schemaVersion", "deckId", "canvas", "theme", "slides", "comments"],
-  "properties": {
-    "schemaVersion": {"const": "1.0"},
-    "deckId": {"type": "string", "minLength": 1},
-    "canvas": {
-      "type": "object", "additionalProperties": false, "required": ["width", "height"],
-      "properties": {"width": {"const": 1920}, "height": {"const": 1080}}
-    },
-    "theme": {"$ref": "#/$defs/theme"},
-    "slides": {"type": "array", "minItems": 1, "maxItems": 30, "items": {"$ref": "#/$defs/slide"}},
-    "comments": {"type": "array", "items": {"$ref": "#/$defs/comment"}}
-  },
-  "$defs": {
-    "frame": {
-      "type": "object", "additionalProperties": false,
-      "required": ["x", "y", "width", "height"],
-      "properties": {
-        "x": {"type": "number"}, "y": {"type": "number"},
-        "width": {"type": "number", "exclusiveMinimum": 0},
-        "height": {"type": "number", "exclusiveMinimum": 0}
-      }
-    },
-    "theme": {
-      "type": "object", "additionalProperties": false,
-      "required": ["version", "palette", "typography", "background"],
-      "properties": {
-        "version": {"const": "1.0"},
-        "palette": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}},
-        "typography": {"type": "object", "required": ["heading", "body"], "properties": {"heading": {"type": "string"}, "body": {"type": "string"}}, "additionalProperties": false},
-        "background": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
-      }
-    },
-    "baseElement": {
-      "type": "object", "required": ["id", "type", "frame", "visible", "locked"],
-      "properties": {"id": {"type": "string", "minLength": 1}, "type": {"type": "string"}, "frame": {"$ref": "#/$defs/frame"}, "visible": {"type": "boolean"}, "locked": {"type": "boolean"}}
-    },
-    "text": {
-      "allOf": [{"$ref": "#/$defs/baseElement"}, {"type": "object", "additionalProperties": false,
-        "required": ["id", "type", "frame", "visible", "locked", "content", "fontFamily", "fontSize", "weight", "color", "align", "lineHeight"],
-        "properties": {"id": {"type": "string"}, "type": {"const": "text"}, "frame": {"$ref": "#/$defs/frame"}, "visible": {"type": "boolean"}, "locked": {"type": "boolean"}, "content": {"type": "string"}, "fontFamily": {"enum": ["Inter", "Arial", "Georgia"]}, "fontSize": {"type": "number", "minimum": 8, "maximum": 400}, "weight": {"enum": [400, 500, 600, 700]}, "color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}, "align": {"enum": ["left", "center", "right"]}, "lineHeight": {"type": "number", "minimum": 0.8, "maximum": 3}}}]},
-    "image": {
-      "allOf": [{"$ref": "#/$defs/baseElement"}, {"type": "object", "additionalProperties": false,
-        "required": ["id", "type", "frame", "visible", "locked", "assetId", "fit"],
-        "properties": {"id": {"type": "string"}, "type": {"const": "image"}, "frame": {"$ref": "#/$defs/frame"}, "visible": {"type": "boolean"}, "locked": {"type": "boolean"}, "assetId": {"type": "string", "minLength": 1}, "fit": {"enum": ["contain", "cover"]}}}]},
-    "shape": {
-      "allOf": [{"$ref": "#/$defs/baseElement"}, {"type": "object", "additionalProperties": false,
-        "required": ["id", "type", "frame", "visible", "locked", "shape", "fill", "stroke", "strokeWidth", "opacity"],
-        "properties": {"id": {"type": "string"}, "type": {"const": "shape"}, "frame": {"$ref": "#/$defs/frame"}, "visible": {"type": "boolean"}, "locked": {"type": "boolean"}, "shape": {"enum": ["rect", "ellipse", "line"]}, "fill": {"type": "string"}, "stroke": {"type": "string"}, "strokeWidth": {"type": "number", "minimum": 0}, "opacity": {"type": "number", "minimum": 0, "maximum": 1}}}]},
-    "element": {"oneOf": [{"$ref": "#/$defs/text"}, {"$ref": "#/$defs/image"}, {"$ref": "#/$defs/shape"}]},
-    "slide": {"type": "object", "additionalProperties": false, "required": ["id", "name", "elements"], "properties": {"id": {"type": "string", "minLength": 1}, "name": {"type": "string", "maxLength": 200}, "elements": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/element"}}}},
-    "comment": {"type": "object", "additionalProperties": false, "required": ["id", "slideId", "text", "resolved"], "properties": {"id": {"type": "string"}, "slideId": {"type": "string"}, "anchor": {"type": "object", "additionalProperties": false, "required": ["x", "y"], "properties": {"x": {"type": "number", "minimum": 0, "maximum": 1}, "y": {"type": "number", "minimum": 0, "maximum": 1}}}, "text": {"type": "string", "maxLength": 2000}, "resolved": {"type": "boolean"}}}
-  }
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://presentator.dev/schemas/deck-1.0.json",
+	"title": "Presentator Deck 1.0",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["schemaVersion", "deckId", "canvas", "theme", "slides", "comments"],
+	"properties": {
+		"schemaVersion": { "const": "1.0" },
+		"deckId": { "type": "string", "minLength": 1 },
+		"canvas": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["width", "height"],
+			"properties": { "width": { "const": 1920 }, "height": { "const": 1080 } }
+		},
+		"theme": { "$ref": "#/$defs/theme" },
+		"slides": {
+			"type": "array",
+			"minItems": 1,
+			"maxItems": 30,
+			"items": { "$ref": "#/$defs/slide" }
+		},
+		"comments": { "type": "array", "items": { "$ref": "#/$defs/comment" } }
+	},
+	"$defs": {
+		"frame": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["x", "y", "width", "height"],
+			"properties": {
+				"x": { "type": "number" },
+				"y": { "type": "number" },
+				"width": { "type": "number", "exclusiveMinimum": 0 },
+				"height": { "type": "number", "exclusiveMinimum": 0 }
+			}
+		},
+		"theme": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "palette", "typography", "background"],
+			"properties": {
+				"version": { "const": "1.0" },
+				"palette": {
+					"type": "object",
+					"additionalProperties": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+				},
+				"typography": {
+					"type": "object",
+					"required": ["heading", "body"],
+					"properties": { "heading": { "type": "string" }, "body": { "type": "string" } },
+					"additionalProperties": false
+				},
+				"background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+			}
+		},
+		"baseElement": {
+			"type": "object",
+			"required": ["id", "type", "frame", "visible", "locked"],
+			"properties": {
+				"id": { "type": "string", "minLength": 1 },
+				"type": { "type": "string" },
+				"frame": { "$ref": "#/$defs/frame" },
+				"visible": { "type": "boolean" },
+				"locked": { "type": "boolean" }
+			}
+		},
+		"text": {
+			"allOf": [
+				{ "$ref": "#/$defs/baseElement" },
+				{
+					"type": "object",
+					"additionalProperties": false,
+					"required": [
+						"id",
+						"type",
+						"frame",
+						"visible",
+						"locked",
+						"content",
+						"fontFamily",
+						"fontSize",
+						"weight",
+						"color",
+						"align",
+						"lineHeight"
+					],
+					"properties": {
+						"id": { "type": "string" },
+						"type": { "const": "text" },
+						"frame": { "$ref": "#/$defs/frame" },
+						"visible": { "type": "boolean" },
+						"locked": { "type": "boolean" },
+						"content": { "type": "string" },
+						"fontFamily": { "enum": ["Inter", "Arial", "Georgia"] },
+						"fontSize": { "type": "number", "minimum": 8, "maximum": 400 },
+						"weight": { "enum": [400, 500, 600, 700] },
+						"color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+						"align": { "enum": ["left", "center", "right"] },
+						"lineHeight": { "type": "number", "minimum": 0.8, "maximum": 3 }
+					}
+				}
+			]
+		},
+		"image": {
+			"allOf": [
+				{ "$ref": "#/$defs/baseElement" },
+				{
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["id", "type", "frame", "visible", "locked", "assetId", "fit"],
+					"properties": {
+						"id": { "type": "string" },
+						"type": { "const": "image" },
+						"frame": { "$ref": "#/$defs/frame" },
+						"visible": { "type": "boolean" },
+						"locked": { "type": "boolean" },
+						"assetId": { "type": "string", "minLength": 1 },
+						"fit": { "enum": ["contain", "cover"] }
+					}
+				}
+			]
+		},
+		"shape": {
+			"allOf": [
+				{ "$ref": "#/$defs/baseElement" },
+				{
+					"type": "object",
+					"additionalProperties": false,
+					"required": [
+						"id",
+						"type",
+						"frame",
+						"visible",
+						"locked",
+						"shape",
+						"fill",
+						"stroke",
+						"strokeWidth",
+						"opacity"
+					],
+					"properties": {
+						"id": { "type": "string" },
+						"type": { "const": "shape" },
+						"frame": { "$ref": "#/$defs/frame" },
+						"visible": { "type": "boolean" },
+						"locked": { "type": "boolean" },
+						"shape": { "enum": ["rect", "ellipse", "line"] },
+						"fill": { "type": "string" },
+						"stroke": { "type": "string" },
+						"strokeWidth": { "type": "number", "minimum": 0 },
+						"opacity": { "type": "number", "minimum": 0, "maximum": 1 }
+					}
+				}
+			]
+		},
+		"element": {
+			"oneOf": [
+				{ "$ref": "#/$defs/text" },
+				{ "$ref": "#/$defs/image" },
+				{ "$ref": "#/$defs/shape" }
+			]
+		},
+		"slide": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["id", "name", "elements"],
+			"properties": {
+				"id": { "type": "string", "minLength": 1 },
+				"name": { "type": "string", "maxLength": 200 },
+				"elements": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/element" } }
+			}
+		},
+		"comment": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["id", "slideId", "text", "resolved"],
+			"properties": {
+				"id": { "type": "string" },
+				"slideId": { "type": "string" },
+				"anchor": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["x", "y"],
+					"properties": {
+						"x": { "type": "number", "minimum": 0, "maximum": 1 },
+						"y": { "type": "number", "minimum": 0, "maximum": 1 }
+					}
+				},
+				"text": { "type": "string", "maxLength": 2000 },
+				"resolved": { "type": "boolean" }
+			}
+		}
+	}
 }
