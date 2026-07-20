@@ -32,20 +32,32 @@ try {
 		const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 		await page.setContent(html, { waitUntil: 'networkidle' });
 		await page.evaluate(async () => {
-			await document.fonts.ready;
-			await Promise.all(
-				[...document.images].map(async (image) => {
-					if (!image.complete) {
-						await new Promise((resolve, reject) => {
-							image.addEventListener('load', resolve, { once: true });
-							image.addEventListener('error', reject, { once: true });
-						});
-					}
-					if (image.naturalWidth <= 0) throw new Error(`image failed to load: ${image.src}`);
-				})
-			);
+			if (!window.__PRESENTATOR_RENDER_READY__)
+				throw new Error('renderer readiness contract missing');
+			await window.__PRESENTATOR_RENDER_READY__;
 		});
-		if (process.argv.includes('--screenshot')) {
+		if (process.argv.includes('--inspect')) {
+			const fidelity = await page.evaluate(() => {
+				const text = document.querySelector('[data-element-id="text"]');
+				const line = document.querySelector('[data-element-id="line"]');
+				const crop = document.querySelector('[data-crop-version]');
+				const image = crop?.querySelector('img');
+				const textStyle = text ? getComputedStyle(text) : null;
+				const lineStyle = line ? getComputedStyle(line) : null;
+				const imageStyle = image ? getComputedStyle(image) : null;
+				return {
+					fontFamily: textStyle?.fontFamily.split(',')[0].replace(/["']/g, '').trim(),
+					textHeight: text?.getBoundingClientRect().height,
+					lineHeight: textStyle ? Number.parseFloat(textStyle.lineHeight) : 0,
+					lineColor: lineStyle?.backgroundColor,
+					lineWidth: lineStyle?.height,
+					cropVersion: crop?.getAttribute('data-crop-version'),
+					cropLeft: imageStyle?.left,
+					cropWidth: imageStyle?.width
+				};
+			});
+			process.stdout.write(JSON.stringify(fidelity));
+		} else if (process.argv.includes('--screenshot')) {
 			process.stdout.write(await page.screenshot({ type: 'png', fullPage: true }));
 		} else {
 			const pdf = await page.pdf({

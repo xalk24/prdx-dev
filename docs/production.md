@@ -15,6 +15,9 @@ uses exact `playwright@1.60.0` / its Chromium revision. Provision with
 `npx playwright install --with-deps chromium`; startup readiness verifies the
 renderer version, Playwright pin and browser version before accepting traffic.
 
-Assets are resolved from the same-origin loopback API. Export waits for
-`document.fonts.ready` and every image load; missing assets fail the job rather
-than producing a partial PDF. Do not allow arbitrary external asset URLs.
+The renderer exposes `window.__PRESENTATOR_RENDER_READY__`. Chromium awaits this
+promise before capture. It resolves only after the requested fonts and every
+image load with `naturalWidth > 0`; missing/corrupt assets reject with
+`asset_load_failed:<assetId>` and no partial artifact is published. The browser
+uses the allowlisted same-origin project asset API; the export worker supplies
+an ownership-checked data-URI map. Arbitrary external asset URLs are forbidden.

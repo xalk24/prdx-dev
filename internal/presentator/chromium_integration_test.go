@@ -37,9 +37,48 @@ func TestChromiumRendererGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(png)
-	const golden = "259794d1d877e7cec788c0d0cfa6efb38f82b3fa6d7251c1dfa67e0697e4817e"
+	const golden = "7aebbb548879b296527266576a17ceab39cd6a2729c610a26ad0ae726ea6802c"
 	if got := hex.EncodeToString(sum[:]); got != golden {
 		t.Fatalf("renderer fidelity changed: got %s want %s", got, golden)
+	}
+}
+
+func TestChromiumRendererProductionFidelity(t *testing.T) {
+	root := filepath.Join("..", "..")
+	fixture, err := os.Open(filepath.Join(root, "api", "fixtures", "fidelity-request.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fixture.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "node", filepath.Join("scripts", "render-pdf.mjs"), "--inspect")
+	cmd.Dir, cmd.Stdin = root, fixture
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		FontFamily  string  `json:"fontFamily"`
+		TextHeight  float64 `json:"textHeight"`
+		LineHeight  float64 `json:"lineHeight"`
+		LineColor   string  `json:"lineColor"`
+		LineWidth   string  `json:"lineWidth"`
+		CropVersion string  `json:"cropVersion"`
+		CropLeft    string  `json:"cropLeft"`
+		CropWidth   string  `json:"cropWidth"`
+	}
+	if err := json.Unmarshal(output, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.FontFamily != "Inter" || got.TextHeight <= got.LineHeight {
+		t.Fatalf("bundled Inter did not produce wrapped text: %+v", got)
+	}
+	if got.LineColor != "rgb(220, 38, 38)" || got.LineWidth != "5px" {
+		t.Fatalf("custom line style lost: %+v", got)
+	}
+	if got.CropVersion != "1.0" || got.CropLeft == "0px" || got.CropWidth == "360px" {
+		t.Fatalf("non-default crop geometry lost: %+v", got)
 	}
 }
 

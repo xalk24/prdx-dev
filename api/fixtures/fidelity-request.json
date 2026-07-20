@@ -6,7 +6,7 @@
 		"theme": {
 			"version": "1.0",
 			"palette": { "primary": "#2563EB" },
-			"typography": { "heading": "Arial", "body": "Arial" },
+			"typography": { "heading": "Inter", "body": "Inter" },
 			"background": "#FFFFFF"
 		},
 		"slides": [
@@ -17,11 +17,11 @@
 					{
 						"id": "text",
 						"type": "text",
-						"frame": { "x": 80, "y": 60, "width": 800, "height": 140 },
+						"frame": { "x": 80, "y": 60, "width": 430, "height": 220 },
 						"visible": true,
 						"locked": false,
-						"content": "Preview = PDF",
-						"fontFamily": "Arial",
+						"content": "Preview and PDF preserve identical Inter line breaks",
+						"fontFamily": "Inter",
 						"fontSize": 64,
 						"weight": 700,
 						"color": "#112233",
@@ -35,7 +35,8 @@
 						"visible": true,
 						"locked": false,
 						"assetId": "image-1",
-						"fit": "cover"
+						"fit": "cover",
+						"crop": { "version": "1.0", "x": 0.2, "y": 0.1, "width": 0.6, "height": 0.7 }
 					},
 					{
 						"id": "rect",

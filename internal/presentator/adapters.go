@@ -87,7 +87,7 @@ func (c ChromiumPDF) Ready(ctx context.Context) error {
 	if err := json.Unmarshal(output, &readiness); err != nil {
 		return fmt.Errorf("decode chromium readiness: %w", err)
 	}
-	if !readiness.Ready || readiness.RendererVersion != "1.0.0" || readiness.PlaywrightVersion != "1.60.0" || readiness.ChromiumVersion == "" {
+	if !readiness.Ready || readiness.RendererVersion != "1.1.0" || readiness.PlaywrightVersion != "1.60.0" || readiness.ChromiumVersion == "" {
 		return fmt.Errorf("unexpected chromium readiness: %+v", readiness)
 	}
 	return nil
