@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { ApiError, PresentatorApi, waitForJob } from '$lib/editor/api';
+	import { fromContract, toContract, type ContractDeck } from '$lib/editor/contract';
 	import {
 		cloneDeck,
 		duplicateSlide,
@@ -14,32 +16,54 @@
 	let selectedId = $state('headline');
 	let mode = $state<'edit' | 'preview'>('edit');
 	let tab = $state<'design' | 'layers' | 'comments'>('design');
-	let save = $state<'saved' | 'dirty' | 'saving'>('saved');
+	let save = $state<'saved' | 'dirty' | 'saving' | 'error'>('saved');
 	let job = $state<JobState>('idle');
+	let exportState = $state<JobState>('idle');
+	let errorMessage = $state('');
+	let projectId = $state('');
+	let jobId = $state('');
+	let canonical = $state<ContractDeck | null>(null);
+	const api = new PresentatorApi();
 	let zoom = $state(68);
 	let note = $state('');
 	let notes = $state(['Keep the opening line confident and direct.']);
 	let timer: ReturnType<typeof setTimeout>;
 	let slide = $derived(deck.slides[slideIndex]);
 	let selected = $derived(slide?.elements.find((e) => e.id === selectedId));
-	onMount(() => {
-		const raw = localStorage.getItem('presentator-deck');
-		if (raw)
-			try {
-				deck = JSON.parse(raw);
-			} catch {
-				localStorage.removeItem('presentator-deck');
+	onMount(async () => {
+		try {
+			projectId = localStorage.getItem('presentator-project') ?? '';
+			if (!projectId) {
+				projectId = (await api.createProject(deck.title)).id;
+				localStorage.setItem('presentator-project', projectId);
 			}
+			const snapshot = await api.getDeck(projectId);
+			canonical = snapshot.deck;
+			deck = fromContract(snapshot.deck, snapshot.revision);
+			selectedId = deck.slides[0]?.elements[0]?.id ?? '';
+		} catch (error) {
+			errorMessage = messageFor(error, 'API unavailable. Check that the local server is running.');
+		}
 	});
+	function messageFor(error: unknown, fallback: string) {
+		return error instanceof ApiError ? error.message : fallback;
+	}
 	function dirty() {
 		save = 'dirty';
 		clearTimeout(timer);
-		timer = setTimeout(() => {
+		timer = setTimeout(async () => {
+			if (!canonical || !projectId) return;
 			save = 'saving';
-			setTimeout(() => {
-				localStorage.setItem('presentator-deck', JSON.stringify(deck));
+			try {
+				const snapshot = await api.saveDeck(projectId, toContract(deck, canonical), deck.revision);
+				canonical = snapshot.deck;
+				deck.revision = snapshot.revision;
 				save = 'saved';
-			}, 450);
+				errorMessage = '';
+			} catch (error) {
+				save = 'error';
+				errorMessage = messageFor(error, 'Save failed. Retry after checking the API.');
+			}
 		}, 750);
 	}
 	function patch(value: Partial<DeckElement>) {
@@ -70,11 +94,72 @@
 		slideIndex++;
 		dirty();
 	}
-	function generate() {
+	async function generate() {
 		if (job === 'running' || job === 'queued') return;
-		job = 'queued';
-		setTimeout(() => (job = 'running'), 600);
-		setTimeout(() => (job = 'succeeded'), 2400);
+		try {
+			const created = await api.createGeneration(
+				projectId,
+				'Improve this deck while preserving its theme.'
+			);
+			jobId = created.id;
+			job = created.status;
+			const completed = await waitForJob(api, jobId);
+			job = completed.status;
+			if (completed.status === 'failed')
+				errorMessage = completed.error?.message ?? 'Generation failed.';
+		} catch (error) {
+			job = 'failed';
+			errorMessage = messageFor(error, 'Generation failed.');
+		}
+	}
+	async function reviewCandidate() {
+		try {
+			const candidate = await api.getCandidate(jobId);
+			canonical = candidate;
+			deck = fromContract(candidate, deck.revision);
+			mode = 'preview';
+		} catch (error) {
+			job = 'failed';
+			errorMessage = messageFor(error, 'Candidate unavailable.');
+		}
+	}
+	async function applyCandidate() {
+		try {
+			const snapshot = await api.applyCandidate(jobId, deck.revision);
+			canonical = snapshot.deck;
+			deck = fromContract(snapshot.deck, snapshot.revision);
+			job = 'idle';
+			mode = 'edit';
+		} catch (error) {
+			job = 'failed';
+			errorMessage = messageFor(error, 'Could not apply candidate.');
+		}
+	}
+	async function exportPdf() {
+		if (save !== 'saved') {
+			errorMessage = 'Wait for autosave before exporting.';
+			return;
+		}
+		try {
+			exportState = 'queued';
+			const created = await api.createExport(projectId, deck.revision);
+			const completed = await waitForJob(api, created.id, undefined, 'export');
+			exportState = completed.status;
+			if (completed.status !== 'succeeded') {
+				errorMessage = completed.error?.message ?? 'Export failed.';
+				return;
+			}
+			const blob = await api.downloadExport(completed.id);
+			const href = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = href;
+			anchor.download = `${deck.title}.pdf`;
+			anchor.click();
+			URL.revokeObjectURL(href);
+		} catch (error) {
+			exportState = 'failed';
+			errorMessage = messageFor(error, 'Export failed.');
+		}
 	}
 	function addNote() {
 		if (note.trim()) {
@@ -104,8 +189,21 @@
 		</div>
 		<div class="actions">
 			<span class:pending={save !== 'saved'}
-				>● {save === 'saved' ? 'Saved' : save === 'dirty' ? 'Unsaved changes' : 'Saving…'}</span
-			><button class="plain">Share</button><button class="dark">Export PDF⌄</button>
+				>● {save === 'saved'
+					? `Saved · r${deck.revision}`
+					: save === 'dirty'
+						? 'Unsaved changes'
+						: save === 'saving'
+							? 'Saving…'
+							: 'Save failed'}</span
+			><button class="plain">Share</button><button
+				class="dark"
+				onclick={exportPdf}
+				disabled={exportState === 'queued' || exportState === 'running'}
+				>{exportState === 'queued' || exportState === 'running'
+					? 'Exporting…'
+					: 'Export PDF⌄'}</button
+			>
 		</div>
 	</header>
 	<nav class="tools">
@@ -130,6 +228,12 @@
 			>
 		</div>
 	</nav>
+	{#if errorMessage}<div class="error-banner" role="alert">
+			<span>{errorMessage}</span><button
+				onclick={() => (errorMessage = '')}
+				aria-label="Dismiss error">×</button
+			>
+		</div>{/if}
 	<main>
 		<aside class="slides">
 			<div class="aside-head">Slides <small>{deck.slides.length}</small><button>•••</button></div>
@@ -156,9 +260,9 @@
 		</aside>
 		<section class="stage" aria-label="Canvas workspace">
 			{#if job === 'succeeded'}<div class="candidate">
-					✦ AI candidate is ready <button onclick={() => (job = 'idle')}>Review</button><button
+					✦ AI candidate is ready <button onclick={reviewCandidate}>Review</button><button
 						class="apply"
-						onclick={() => (job = 'idle')}>Apply</button
+						onclick={applyCandidate}>Apply</button
 					>
 				</div>{/if}
 			<div class="canvas-wrap" style={`--zoom:${zoom / 100}`}>

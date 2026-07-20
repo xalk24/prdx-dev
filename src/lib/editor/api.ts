@@ -13,6 +13,11 @@ export interface DeckSnapshot {
 	deck: ContractDeck;
 	revision: number;
 }
+export interface Project {
+	id: string;
+	title: string;
+	revision: number;
+}
 export class ApiError extends Error {
 	constructor(
 		public status: number,
@@ -47,6 +52,13 @@ export class PresentatorApi {
 	getDeck(projectId: string) {
 		return this.json<DeckSnapshot>(`/projects/${projectId}/deck`);
 	}
+	createProject(title: string) {
+		return this.json<Project>('/projects', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ title })
+		});
+	}
 	saveDeck(projectId: string, deck: ContractDeck, revision: number) {
 		return this.json<DeckSnapshot>(`/projects/${projectId}/deck`, {
 			method: 'PUT',
@@ -63,6 +75,9 @@ export class PresentatorApi {
 	}
 	getJob(jobId: string) {
 		return this.json<Job>(`/generation-jobs/${jobId}`);
+	}
+	getExportJob(jobId: string) {
+		return this.json<Job>(`/export-jobs/${jobId}`);
 	}
 	getCandidate(jobId: string) {
 		return this.json<ContractDeck>(`/generation-jobs/${jobId}/candidate`);
@@ -81,15 +96,27 @@ export class PresentatorApi {
 			body: JSON.stringify({ revision })
 		});
 	}
+	async downloadExport(jobId: string) {
+		const response = await this.request(`${this.base}/export-jobs/${jobId}/download`);
+		if (!response.ok)
+			throw new ApiError(
+				response.status,
+				'export_download_failed',
+				'Could not download PDF.',
+				true
+			);
+		return response.blob();
+	}
 }
 
 export async function waitForJob(
 	api: PresentatorApi,
 	id: string,
-	wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+	wait = (ms: number) => new Promise((r) => setTimeout(r, ms)),
+	type: 'generation' | 'export' = 'generation'
 ): Promise<Job> {
 	for (let attempt = 0; attempt < 60; attempt++) {
-		const job = await api.getJob(id);
+		const job = type === 'export' ? await api.getExportJob(id) : await api.getJob(id);
 		if (!['queued', 'running'].includes(job.status)) return job;
 		await wait(1000);
 	}

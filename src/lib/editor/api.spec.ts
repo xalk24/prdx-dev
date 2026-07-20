@@ -6,7 +6,12 @@ const deck = {
 	schemaVersion: '1.0',
 	deckId: 'deck-demo',
 	canvas: { width: 1920, height: 1080 },
-	theme: { background: '#FFFFFF' },
+	theme: {
+		version: '1.0',
+		palette: { primary: '#2563EB' },
+		typography: { heading: 'Inter', body: 'Inter' },
+		background: '#FFFFFF'
+	},
 	slides: [{ id: 'slide-1', name: 'Opening', elements: [] }],
 	comments: []
 } as ContractDeck;
@@ -53,6 +58,23 @@ describe('Presentator API contract', () => {
 			'/api/v1/projects/project-1/export-jobs',
 			expect.objectContaining({ body: JSON.stringify({ revision: 13 }) })
 		);
+	});
+	it('polls export status on its dedicated route and downloads PDF bytes', async () => {
+		const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+		const fetcher = vi
+			.fn()
+			.mockResolvedValueOnce(
+				response({ id: 'export-1', projectId: 'project-1', type: 'export', status: 'succeeded' })
+			)
+			.mockResolvedValueOnce(
+				new Response(pdf, { status: 200, headers: { 'Content-Type': 'application/pdf' } })
+			);
+		const api = new PresentatorApi(fetcher as typeof fetch);
+		const job = await waitForJob(api, 'export-1', async () => {}, 'export');
+		const artifact = await api.downloadExport(job.id);
+		expect(fetcher.mock.calls[0][0]).toBe('/api/v1/export-jobs/export-1');
+		expect(fetcher.mock.calls[1][0]).toBe('/api/v1/export-jobs/export-1/download');
+		expect(artifact.type).toBe('application/pdf');
 	});
 	it('polls queued/running jobs and exposes stable failure envelopes', async () => {
 		const fetcher = vi

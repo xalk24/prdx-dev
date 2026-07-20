@@ -151,6 +151,28 @@ select:focus-visible {
 .tools .ai:disabled {
 	cursor: progress;
 }
+.error-banner {
+	position: fixed;
+	top: 128px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	max-width: 560px;
+	padding: 10px 12px 10px 15px;
+	border: 1px solid #d8a49c;
+	border-radius: 7px;
+	background: #fff5f3;
+	color: #8b2f24;
+	box-shadow: 0 6px 24px #0002;
+	font-size: 12px;
+}
+.error-banner button {
+	font-size: 18px;
+	color: inherit;
+}
 main {
 	min-height: 0;
 	display: grid;

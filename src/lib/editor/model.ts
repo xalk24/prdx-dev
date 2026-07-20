@@ -1,5 +1,5 @@
-export type JobState = 'idle' | 'queued' | 'running' | 'succeeded' | 'failed';
-export type ElementKind = 'text' | 'shape';
+export type JobState = 'idle' | 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type ElementKind = 'text' | 'shape' | 'image';
 export interface DeckElement {
 	id: string;
 	kind: ElementKind;
